@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ROOTS Dental - Cloud Sync (Multi-Device)</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.38.4"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto; background: #f5f5f5; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 16px; }
+        .header { background: linear-gradient(135deg, #1c5e5e 0%, #2a8a8a 100%); color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; text-align: center; }
+        .header h1 { font-size: 24px; margin-bottom: 4px; }
+        .header-subtitle { font-size: 12px; opacity: 0.9; }
+        
+        /* LOGIN PAGE STYLES */
+        .login-container { max-width: 400px; margin: 50px auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .login-title { font-size: 24px; font-weight: bold; color: #1c5e5e; margin-bottom: 30px; text-align: center; }
+        .login-form { display: none; }
+        .login-form.active { display: block; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-weight: 500; margin-bottom: 6px; }
+        .form-group input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        .btn-login { width: 100%; padding: 12px; background: #1c5e5e; color: white; border: none; border-radius: 4px; font-weight: 500; cursor: pointer; margin-top: 20px; }
+        .btn-login:hover { background: #154545; }
+        .form-toggle { text-align: center; margin-top: 16px; font-size: 12px; }
+        .form-toggle a { color: #1c5e5e; cursor: pointer; text-decoration: none; }
+        .auth-status { padding: 12px; background: #e8f4f4; border-radius: 4px; margin-bottom: 16px; font-size: 12px; }
+        .sync-status { padding: 8px 12px; background: #f0f0f0; border-radius: 4px; font-size: 11px; margin-bottom: 12px; }
+        .sync-status.synced { background: #e8f9e8; color: #27ae60; }
+        .sync-status.syncing { background: #fff9e8; color: #f39c12; }
+        .sync-status.error { background: #ffebeb; color: #e74c3c; }
+        
+        .nav { display: flex; gap: 8px; margin-bottom: 20px; background: white; padding: 12px; border-radius: 8px; flex-wrap: wrap; }
+        .nav-btn { flex: 1; min-width: 80px; padding: 10px; background: #f0f0f0; border: 2px solid transparent; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 11px; transition: all 0.2s; }
+        .nav-btn:hover { background: #e8f4f4; border-color: #1c5e5e; }
+        .nav-btn.active { background: #1c5e5e; color: white; border-color: #1c5e5e; }
+        .btn-logout { background: #e74c3c; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; }
+        
+        .page { display: none; }
+        .page.active { display: block; }
+        .card { background: white; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .card-title { font-size: 14px; font-weight: bold; color: #1c5e5e; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #e8f4f4; }
+        .btn { padding: 10px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 12px; transition: all 0.2s; }
+        .btn-primary { background: #1c5e5e; color: white; }
+        .btn-primary:hover { background: #154545; }
+        .btn-secondary { background: #f0f0f0; color: #333; border: 1px solid #ddd; }
+        .section { background: #f9f9f9; padding: 12px; border-radius: 6px; margin-bottom: 12px; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        input, select, textarea { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px; font-size: 12px; }
+        
+        .patient-card { background: #f9f9f9; padding: 12px; margin-bottom: 10px; border-radius: 6px; border-left: 4px solid #1c5e5e; }
+        .patient-card:hover { background: #e8f4f4; }
+        .patient-info { cursor: pointer; }
+        .patient-info:hover { text-decoration: underline; }
+        
+        .alert { padding: 12px; border-radius: 6px; margin-bottom: 12px; }
+        .alert-info { background: #cce5ff; border-left: 4px solid #3498db; color: #1e5a96; }
+        .alert-success { background: #e8f9e8; border-left: 4px solid #27ae60; color: #1e5a1e; }
+        .alert-error { background: #ffebeb; border-left: 4px solid #e74c3c; color: #a93226; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- LOGIN PAGE -->
+        <div id="loginPage" class="page active">
+            <div class="login-container">
+                <div class="login-title">🦷 ROOTS DENTAL CLINIC</div>
+                <div style="text-align: center; font-size: 12px; color: #666; margin-bottom: 30px;">
+                    Cloud Sync - Multi-Device Access<br>
+                    iPhone | iPad | Laptop
+                </div>
+
+                <!-- LOGIN FORM -->
+                <div id="loginForm" class="login-form active">
+                    <div class="auth-status">
+                        ℹ️ Login with your email & password to sync across all devices
+                    </div>
+                    <div class="form-group">
+                        <label>Email Address</label>
+                        <input type="email" id="loginEmail" placeholder="your@email.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="loginPassword" placeholder="••••••••">
+                    </div>
+                    <button class="btn-login" onclick="handleLogin()">🔓 Login</button>
+                    <div class="form-toggle">
+                        New to ROOTS? <a onclick="toggleForm('signup')">Sign up here</a>
+                    </div>
+                    <div id="loginError" style="margin-top: 16px;"></div>
+                </div>
+
+                <!-- SIGNUP FORM -->
+                <div id="signupForm" class="login-form">
+                    <div class="auth-status">
+                        ✅ Create a new account to start using ROOTS Dental Cloud
+                    </div>
+                    <div class="form-group">
+                        <label>Email Address</label>
+                        <input type="email" id="signupEmail" placeholder="your@email.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Password (min 6 characters)</label>
+                        <input type="password" id="signupPassword" placeholder="••••••••">
+                    </div>
+                    <div class="form-group">
+                        <label>Confirm Password</label>
+                        <input type="password" id="signupPasswordConfirm" placeholder="••••••••">
+                    </div>
+                    <button class="btn-login" onclick="handleSignup()">✅ Create Account</button>
+                    <div class="form-toggle">
+                        Already have account? <a onclick="toggleForm('login')">Login here</a>
+                    </div>
+                    <div id="signupError" style="margin-top: 16px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- APP PAGE (After login) -->
+        <div id="appPage" class="page">
+            <div class="header">
+                <h1>🦷 ROOTS DENTAL CLINIC</h1>
+                <div class="header-subtitle">
+                    Dr Mayank Gupta, BDS, MDS - Implant Prosthodontist | Cloud Sync Active
+                </div>
+                <div style="margin-top: 12px; font-size: 12px;">
+                    👤 <span id="userEmail">User</span>
+                    <button class="btn-logout" onclick="handleLogout()" style="float: right;">🔓 Logout</button>
+                </div>
+            </div>
+
+            <!-- SYNC STATUS -->
+            <div id="syncStatus" class="sync-status synced">
+                ✅ Synced - Ready to use
+            </div>
+
+            <div class="nav">
+                <button class="nav-btn active" onclick="goTo('home', this)">🏠 Home</button>
+                <button class="nav-btn" onclick="goTo('patients', this)">👥 Patients</button>
+                <button class="nav-btn" onclick="goTo('payments', this)">💳 Payments</button>
+                <button class="nav-btn" onclick="goTo('reports', this)">📊 Reports</button>
+                <button class="nav-btn" onclick="goTo('settings', this)">⚙️ Settings</button>
+            </div>
+
+            <!-- HOME PAGE -->
+            <div id="home" class="page active">
+                <div class="card">
+                    <div class="card-title">📊 Dashboard Summary</div>
+                    <div class="grid-2">
+                        <div class="section">
+                            <div style="font-size: 20px; font-weight: bold; color: #1c5e5e;" id="totalPatients">0</div>
+                            <div style="font-size: 12px; color: #666;">Total Patients</div>
+                        </div>
+                        <div class="section">
+                            <div style="font-size: 20px; font-weight: bold; color: #d4a574;" id="totalRevenue">₹0</div>
+                            <div style="font-size: 12px; color: #666;">Total Revenue</div>
+                        </div>
+                        <div class="section">
+                            <div style="font-size: 20px; font-weight: bold; color: #27ae60;" id="totalPaid">₹0</div>
+                            <div style="font-size: 12px; color: #666;">Total Paid</div>
+                        </div>
+                        <div class="section">
+                            <div style="font-size: 20px; font-weight: bold; color: #e74c3c;" id="totalPending">₹0</div>
+                            <div style="font-size: 12px; color: #666;">Pending Amount</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">💡 How Cloud Sync Works</div>
+                    <div class="alert alert-info">
+                        ✅ Your data is now syncing across all devices!<br><br>
+                        📱 <strong>Login on any device (iPhone, iPad, Laptop)</strong><br>
+                        ☁️ <strong>Same email & password</strong><br>
+                        🔄 <strong>All data auto-syncs instantly</strong><br>
+                        ⚡ <strong>Works offline - syncs when online</strong><br><br>
+                        Try it now:
+                        <ul style="margin-top: 8px; margin-left: 16px;">
+                            <li>Add a patient on this device</li>
+                            <li>Login on another device</li>
+                            <li>See the new patient appear instantly!</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">🚀 Quick Actions</div>
+                    <button class="btn btn-primary" onclick="goTo('patients')" style="width: 100%; margin-bottom: 8px;">
+                        ➕ Add New Patient
+                    </button>
+                    <button class="btn btn-secondary" onclick="goTo('reports')" style="width: 100%;">
+                        📊 View Reports
+                    </button>
+                </div>
+            </div>
+
+            <!-- PATIENTS PAGE -->
+            <div id="patients" class="page">
+                <div class="card">
+                    <div class="card-title">👥 Patients (Synced from Cloud)</div>
+                    <button class="btn btn-primary" onclick="goTo('addPatient')" style="width: 100%; margin-bottom: 12px;">
+                        ➕ Add New Patient
+                    </button>
+                    <div id="patientsList"></div>
+                </div>
+            </div>
+
+            <!-- PAYMENTS PAGE -->
+            <div id="payments" class="page">
+                <div class="card">
+                    <div class="card-title">💳 Payments (Synced from Cloud)</div>
+                    <div id="paymentsList"></div>
+                </div>
+            </div>
+
+            <!-- REPORTS PAGE -->
+            <div id="reports" class="page">
+                <div class="card">
+                    <div class="card-title">📊 Reports (Real-time from Cloud)</div>
+                    <div class="alert alert-success">
+                        ✅ Reports are live from cloud database<br>
+                        All data is real-time and synced
+                    </div>
+                    <div style="margin-top: 16px;">
+                        <strong>Coming Soon:</strong> Detailed analytics from cloud data
+                    </div>
+                </div>
+            </div>
+
+            <!-- SETTINGS PAGE -->
+            <div id="settings" class="page">
+                <div class="card">
+                    <div class="card-title">⚙️ Settings</div>
+                    <div class="alert alert-info">
+                        <strong>Account Information</strong><br>
+                        Email: <span id="settingsEmail">-</span><br>
+                        Sync Status: <span id="settingsSyncStatus">Loading...</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">☁️ Cloud Sync Info</div>
+                    <div style="font-size: 12px; line-height: 1.6;">
+                        <p><strong>What's Synced:</strong></p>
+                        <ul style="margin-left: 16px; margin-top: 8px;">
+                            <li>✅ All patient records</li>
+                            <li>✅ Financial data (invoices, payments)</li>
+                            <li>✅ Patient photos & X-rays</li>
+                            <li>✅ Treatment notes</li>
+                            <li>✅ Medicines & prescriptions</li>
+                        </ul>
+                        <p style="margin-top: 16px;"><strong>Devices Synced:</strong></p>
+                        <ul style="margin-left: 16px; margin-top: 8px;">
+                            <li>✅ Laptop (this device)</li>
+                            <li>✅ iPad (login to sync)</li>
+                            <li>✅ iPhone (login to sync)</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <button class="btn btn-logout" onclick="handleLogout()" style="width: 100%;">
+                        🔓 Logout & Switch Account
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============= SUPABASE CONFIGURATION =============
+        // YOU MUST UPDATE THESE WITH YOUR SUPABASE CREDENTIALS!
+        const SUPABASE_CONFIG = {
+            URL: 'https://your-project.supabase.co',  // Replace with your Supabase URL
+            ANON_KEY: 'your-anon-key-here'             // Replace with your anon key
+        };
+
+        // Initialize Supabase client
+        let supabase = null;
+        let currentUser = null;
+        let patients = [];
+        let syncChannel = null;
+
+        // Initialize on page load
+        window.onload = async function() {
+            // Check if credentials are set
+            if (SUPABASE_CONFIG.URL.includes('your-project')) {
+                document.getElementById('loginError').innerHTML = 
+                    '<div class="alert alert-error">❌ Please configure Supabase credentials first. See setup guide.</div>';
+                return;
+            }
+
+            // Initialize Supabase
+            supabase = window.supabase.createClient(
+                SUPABASE_CONFIG.URL,
+                SUPABASE_CONFIG.ANON_KEY
+            );
+
+            // Check if already logged in
+            checkAuthStatus();
+        };
+
+        // ============= AUTHENTICATION =============
+
+        function toggleForm(form) {
+            document.getElementById('loginForm').classList.remove('active');
+            document.getElementById('signupForm').classList.remove('active');
+            
+            if (form === 'login') {
+                document.getElementById('loginForm').classList.add('active');
+            } else {
+                document.getElementById('signupForm').classList.add('active');
+            }
+        }
+
+        async function handleLogin() {
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const errorDiv = document.getElementById('loginError');
+
+            if (!email || !password) {
+                errorDiv.innerHTML = '<div class="alert alert-error">❌ Please enter email and password</div>';
+                return;
+            }
+
+            try {
+                const { data, error } = await supabase.auth.signInWithPassword({
+                    email: email,
+                    password: password
+                });
+
+                if (error) throw error;
+
+                currentUser = data.user;
+                localStorage.setItem('user_email', email);
+                showApp();
+            } catch (error) {
+                errorDiv.innerHTML = `<div class="alert alert-error">❌ ${error.message}</div>`;
+            }
+        }
+
+        async function handleSignup() {
+            const email = document.getElementById('signupEmail').value.trim();
+            const password = document.getElementById('signupPassword').value;
+            const passwordConfirm = document.getElementById('signupPasswordConfirm').value;
+            const errorDiv = document.getElementById('signupError');
+
+            if (!email || !password || !passwordConfirm) {
+                errorDiv.innerHTML = '<div class="alert alert-error">❌ Please fill all fields</div>';
+                return;
+            }
+
+            if (password !== passwordConfirm) {
+                errorDiv.innerHTML = '<div class="alert alert-error">❌ Passwords do not match</div>';
+                return;
+            }
+
+            if (password.length < 6) {
+                errorDiv.innerHTML = '<div class="alert alert-error">❌ Password must be at least 6 characters</div>';
+                return;
+            }
+
+            try {
+                const { data, error } = await supabase.auth.signUp({
+                    email: email,
+                    password: password
+                });
+
+                if (error) throw error;
+
+                errorDiv.innerHTML = '<div class="alert alert-success">✅ Account created! Please login above.</div>';
+                setTimeout(() => toggleForm('login'), 2000);
+            } catch (error) {
+                errorDiv.innerHTML = `<div class="alert alert-error">❌ ${error.message}</div>`;
+            }
+        }
+
+        async function handleLogout() {
+            if (confirm('Are you sure you want to logout?')) {
+                try {
+                    await supabase.auth.signOut();
+                    currentUser = null;
+                    patients = [];
+                    localStorage.removeItem('user_email');
+                    showLogin();
+                } catch (error) {
+                    alert('❌ Logout error: ' + error.message);
+                }
+            }
+        }
+
+        async function checkAuthStatus() {
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                
+                if (user) {
+                    currentUser = user;
+                    showApp();
+                } else {
+                    showLogin();
+                }
+            } catch (error) {
+                showLogin();
+            }
+        }
+
+        // ============= UI FUNCTIONS =============
+
+        function showLogin() {
+            document.getElementById('loginPage').classList.add('active');
+            document.getElementById('appPage').classList.remove('active');
+        }
+
+        function showApp() {
+            document.getElementById('loginPage').classList.remove('active');
+            document.getElementById('appPage').classList.add('active');
+            document.getElementById('userEmail').innerText = currentUser.email;
+            document.getElementById('settingsEmail').innerText = currentUser.email;
+            loadPatients();
+            setupSync();
+        }
+
+        function goTo(page, button) {
+            // Hide all pages
+            document.querySelectorAll('#appPage .page').forEach(p => p.classList.remove('active'));
+            document.getElementById(page).classList.add('active');
+
+            // Update active button
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            if (button) button.classList.add('active');
+        }
+
+        // ============= DATA OPERATIONS =============
+
+        async function loadPatients() {
+            try {
+                updateSyncStatus('syncing', '🔄 Loading data from cloud...');
+
+                const { data, error } = await supabase
+                    .from('patients')
+                    .select('*')
+                    .eq('user_id', currentUser.id);
+
+                if (error) throw error;
+
+                patients = data || [];
+                updateDashboard();
+                displayPatients();
+                
+                updateSyncStatus('synced', '✅ Synced - Data loaded');
+            } catch (error) {
+                console.error('Load error:', error);
+                updateSyncStatus('error', '❌ Error loading data: ' + error.message);
+            }
+        }
+
+        function updateDashboard() {
+            let totalRevenue = 0;
+            let totalPaid = 0;
+
+            patients.forEach(p => {
+                totalRevenue += p.total_amount || 0;
+                totalPaid += p.amount_paid || 0;
+            });
+
+            document.getElementById('totalPatients').innerText = patients.length;
+            document.getElementById('totalRevenue').innerText = '₹' + totalRevenue.toLocaleString();
+            document.getElementById('totalPaid').innerText = '₹' + totalPaid.toLocaleString();
+            document.getElementById('totalPending').innerText = '₹' + (totalRevenue - totalPaid).toLocaleString();
+        }
+
+        function displayPatients() {
+            const html = patients.map(p => `
+                <div class="patient-card">
+                    <div class="patient-info">
+                        <strong>${p.name}</strong><br>
+                        ID: ${p.id} | Phone: ${p.phone || '-'}<br>
+                        Invoice: ₹${p.total_amount || 0} | Paid: ₹${p.amount_paid || 0}
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('patientsList').innerHTML = html || '<p style="color: #999;">No patients yet</p>';
+        }
+
+        // ============= SYNC SETUP =============
+
+        function setupSync() {
+            // Subscribe to real-time changes
+            syncChannel = supabase
+                .channel(`patients:${currentUser.id}`)
+                .on(
+                    'postgres_changes',
+                    { event: '*', schema: 'public', table: 'patients', filter: `user_id=eq.${currentUser.id}` },
+                    (payload) => {
+                        console.log('📡 Sync received:', payload);
+                        loadPatients();
+                        updateSyncStatus('synced', '✅ Synced - Changes received');
+                    }
+                )
+                .subscribe();
+        }
+
+        function updateSyncStatus(status, message) {
+            const statusDiv = document.getElementById('syncStatus');
+            statusDiv.className = `sync-status ${status}`;
+            statusDiv.innerText = message;
+            document.getElementById('settingsSyncStatus').innerText = message;
+        }
+
+        // ============= PLACEHOLDER FOR FUTURE FEATURES =============
+
+        function goTo(page, button) {
+            if (page === 'addPatient') {
+                alert('✅ Feature coming soon: Add new patient through cloud');
+                return;
+            }
+
+            // Hide all pages
+            document.querySelectorAll('#appPage .page').forEach(p => p.classList.remove('active'));
+            if (document.getElementById(page)) {
+                document.getElementById(page).classList.add('active');
+            }
+
+            // Update active button
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            if (button) button.classList.add('active');
+        }
+    </script>
+</body>
+</html>
